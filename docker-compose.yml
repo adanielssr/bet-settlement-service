@@ -1,32 +1,81 @@
-version: '3.8'
 services:
   zookeeper:
-    image: 'bitnami/zookeeper:3.8'
+    image: confluentinc/cp-zookeeper:7.3.0
+    hostname: zookeeper
     ports:
-      - '2181:2181'
+      - "2181:2181"
     environment:
-      - ALLOW_ANONYMOUS_LOGIN=yes
+      ALLOW_ANONYMOUS_LOGIN: yes
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
   kafka:
-    image: 'bitnami/kafka:3.2'
+    image: confluentinc/cp-kafka:7.3.0
+    hostname: kafka
     ports:
-      - '9092:9092'
-    environment:
-      - KAFKA_BROKER_ID=1
-      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
-      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092
-      - ALLOW_PLAINTEXT_LISTENER=yes
+      - "9092:9092"
     depends_on:
       - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
   rocketmq-namesrv:
     image: apache/rocketmq:5.1.0
+    container_name: rocketmq-namesrv
     ports:
       - "9876:9876"
     command: sh mqnamesrv
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 9876"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   rocketmq-broker:
     image: apache/rocketmq:5.1.0
+    platform: linux/amd64
+    container_name: rocketmq-broker
     ports:
       - "10911:10911"
-      - "10909:10909"
-    command: sh mqbroker -n rocketmq-namesrv:9876
+      - "8081:8081"
+    command: "sh mqbroker -n rocketmq-namesrv:9876 --enable-proxy -c /home/rocketmq/rocketmq-5.1.0/conf/broker.conf"
+    volumes:
+        - "./broker.conf:/home/rocketmq/rocketmq-5.1.0/conf/broker.conf"
+    environment:
+      JAVA_OPT: "-server -Xms512m -Xmx512m -Xmn256m -Drocketmq.broker.ip1=127.0.0.1"
+      NAMESRV_ADDR: "rocketmq-namesrv:9876"
+      ROCKETMQ_PROXY_REMOTE_ADDR: rocketmq-broker
     depends_on:
-      - rocketmq-namesrv
+      rocketmq-namesrv:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "nc -z localhost 8081" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    depends_on:
+      kafka:
+        condition: service_started
+      rocketmq-broker:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    environment:
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - ROCKETMQ_NAME_SERVER=rocketmq-broker:8081

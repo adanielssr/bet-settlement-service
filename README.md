@@ -10,8 +10,12 @@ It demonstrates a decoupled, asynchronous architecture using industry-standard m
 - **Apache Kafka** for decoupled, real-time event streaming.
 - **Apache RocketMQ** for reliable task queuing for bet settlements.
 - **In-Memory Database (H2)** for storing and querying bets.
+- **Object-Oriented Bet Processing**: Bet outcome logic is encapsulated within the `Bet` entity.
+- **Production-Ready Health Checks** via Spring Boot Actuator.
 - **Event-Driven Architecture** to ensure loose coupling and scalability.
-- **Comprehensive Testing** with unit tests and a full end-to-end integration test.
+- **Robust Exception Handling**: Specific handling for concurrency and integration issues.
+- **Comprehensive Testing** with unit tests, including exception handling scenarios, and a full end-to-end integration test.
+- **Containerized Deployment** with Docker for portability and ease of use.
 
 ## Architectural Notes
 
@@ -25,45 +29,59 @@ To ensure data consistency, it is critical that bet settlements for a single use
 
 To handle transient network issues or temporary broker unavailability, the RocketMQ producer is configured with a **retry policy**. It will attempt to send a message up to 3 times before failing. This significantly increases the guarantee of "at-least-once" delivery, which is critical for a financial transaction like settling a bet.
 
-### 3. Idempotent Consumer
+### 3. Idempotent Consumer & Robust Bet Processing
 
-The final consumer that updates the bet status is designed to be idempotent. If the same settlement message were to be delivered more than once (a possibility in "at-least-once" systems), the logic would simply re-set the bet's status to `SETTLED`. This has no negative side effects and ensures the system remains consistent even in the face of message redelivery.
+The `EventOutcomeConsumer` and the `Bet` entity are designed for idempotency and resilience in a highly concurrent environment:
 
-## How to Run
+- **Encapsulated Bet Logic**: The `Bet.processEventOutcome(EventOutcome eventOutcome)` method directly handles the logic of determining if a bet is `WON` or `LOST` based on the event's result. This method updates the bet's internal status and `settledDate`.
+- **Idempotency in `Bet` Entity**: The `processEventOutcome` method includes an internal check (`if (this.status != BetStatus.PENDING)`) to ensure that if the method is called multiple times for an already processed bet, it will not re-process the outcome but will return the winning status based on its current state.
+- **Optimistic Locking**: The `@Version` field in the `Bet` entity, combined with `@Transactional` in the consumer, ensures that concurrent updates to the same bet are handled gracefully. If an `OptimisticLockingFailureException` occurs (indicating a concurrent modification), it is caught and logged at a `WARN` level, as this is an expected scenario in highly concurrent systems and message re-delivery.
+- **Specific Exception Handling**: The `EventOutcomeConsumer` employs expectation-driven exception handling, specifically catching and logging `IllegalArgumentException` (from `Bet.processEventOutcome`), `JsonProcessingException` (during bet serialization for RocketMQ), and `ClientException` (during RocketMQ message sending) at an `ERROR` level. This provides clear insights into specific failure modes without relying on a generic catch-all.
+
+## How to Run (Docker - Recommended)
+
+This is the simplest way to run the entire application stack, including the required infrastructure.
 
 ### Prerequisites
 
-- Java 21
+- Java 21 (for the build)
 - Docker and Docker Compose
 
-### 1. Start Infrastructure Services
+### 1. Build the Application JAR
 
-The project requires Apache Kafka and Apache RocketMQ to be running. A `docker-compose.yml` file is provided to start both services with a single command.
-
-From the root of the project, run:
+First, use the Gradle wrapper to build the executable JAR file:
 ```bash
-docker-compose up -d
+./gradlew bootJar
 ```
-This will start Kafka (on port `9092`) and RocketMQ (on port `9876`) in the background.
 
-### 2. Run the Application
+### 2. Run the Entire Stack
 
-Once the infrastructure is running, you can start the Spring Boot application using the Gradle wrapper:
-
+Once the JAR is built, use Docker Compose to build the application image and run all services:
 ```bash
-./gradlew bootRun
+docker-compose up --build
 ```
-The application will start on `http://localhost:8080`.
+This will:
+1. Start Kafka and RocketMQ.
+2. Build the Docker image for your application using the `Dockerfile`.
+3. Start your application, connecting it to the other services.
 
-### 3. Use the Application
+The application will be available at `http://localhost:8080`.
 
-You can now interact with the service.
+## Use the Application
 
-#### Publish an Event Outcome
+Once the application is running, you can interact with it.
 
-Send a `POST` request to the `/events/outcome` endpoint. This simulates a sports event finishing and a winner being declared.
+### Check Application Health
 
-**Example Request:**
+The application exposes a production-ready health check endpoint via Spring Boot Actuator. You can check the status of the application and its dependencies (Database, Kafka) by accessing:
+
+- **URL**: `http://localhost:8080/actuator/health`
+
+### Publish an Event Outcome
+
+Send a `POST` request to the `/events/outcome` endpoint.
+
+**Standard `curl` (Linux/macOS/Git Bash):**
 ```bash
 curl -X POST http://localhost:8080/events/outcome \
 -H "Content-Type: application/json" \
@@ -74,13 +92,13 @@ curl -X POST http://localhost:8080/events/outcome \
     }'
 ```
 
-When this request is sent, the application will:
-1. Publish the outcome to the `event-outcomes` Kafka topic.
-2. The Kafka consumer will find the matching bet in the database (which was pre-populated by `DataInitializer.java`).
-3. The consumer will publish a settlement task to the `bet-settlements` RocketMQ topic.
-4. The RocketMQ consumer will receive the task and update the bet's status to `SETTLED`.
+**Windows PowerShell:**
+In PowerShell, `curl` is an alias for `Invoke-WebRequest`, which uses a different syntax. Use this command instead:
+```powershell
+Invoke-WebRequest -Uri http://localhost:8080/events/outcome -Method POST -ContentType "application/json" -Body '{"eventId": "event1", "eventName": "Football Match", "eventWinnerId": "winner1"}'
+```
 
-#### Verify the Result
+### Verify the Result
 
 You can verify the result by checking the application logs or by accessing the H2 in-memory database console.
 
@@ -93,4 +111,4 @@ Run the following SQL query to see the updated bet:
 ```sql
 SELECT * FROM BET WHERE EVENT_ID = 'event1';
 ```
-You will see that the status of the bet with `EVENT_WINNER_ID = 'winner1'` has changed from `PENDING` to `SETTLED`.
+You will see that the status of the bet with `EVENT_WINNER_ID = 'winner1'` has changed from `PENDING` to `WON` or `LOST` (depending on the `eventWinnerId` in your POST request). The final `SETTLED` status would be applied by the RocketMQ consumer.

@@ -26,6 +26,6 @@ public class EventOutcomeController {
     @PostMapping("/outcome")
     public void publishEventOutcome(@RequestBody EventOutcome eventOutcome) throws JsonProcessingException {
         String eventOutcomeJson = objectMapper.writeValueAsString(eventOutcome);
-        kafkaTemplate.send("event-outcomes", eventOutcome.getEventId(), eventOutcomeJson);
+        kafkaTemplate.send("event-outcomes", eventOutcome.eventId().toString(), eventOutcomeJson);
     }
 }

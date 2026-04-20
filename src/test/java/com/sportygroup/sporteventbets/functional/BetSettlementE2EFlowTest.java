@@ -2,7 +2,9 @@ package com.sportygroup.sporteventbets.functional;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sportygroup.sporteventbets.model.Bet;
+import com.sportygroup.sporteventbets.model.BetStatus;
 import com.sportygroup.sporteventbets.model.EventOutcome;
+import com.sportygroup.sporteventbets.model.Money;
 import com.sportygroup.sporteventbets.repository.BetRepository;
 import com.sportygroup.sporteventbets.rocketmq.BetSettlementConsumer;
 import org.apache.rocketmq.client.apis.ClientServiceProvider;
@@ -71,10 +73,12 @@ class BetSettlementE2EFlowTest {
             return mock(SendReceipt.class);
         }).when(rocketMQProducer).send(messageCaptor.capture());
 
-        Bet bet = new Bet(UUID.randomUUID().toString(), "user1", "event1", "market1", "winner1", new BigDecimal("10.00"));
+        UUID eventId = UUID.randomUUID();
+        UUID winnerId = UUID.randomUUID();
+        Bet bet = new Bet(UUID.randomUUID(), UUID.randomUUID(), eventId, "market1", winnerId, new Money(new BigDecimal("10.00"), "USD"), BetStatus.PENDING, 0L, null, null, null);
         betRepository.save(bet);
 
-        EventOutcome eventOutcome = new EventOutcome("event1", "Football Match", "winner1");
+        EventOutcome eventOutcome = new EventOutcome(eventId, "Football Match", winnerId);
         String eventOutcomeJson = objectMapper.writeValueAsString(eventOutcome);
 
         // when
@@ -85,8 +89,11 @@ class BetSettlementE2EFlowTest {
 
         // then
         await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> {
-            Bet settledBet = betRepository.findById(bet.getBetId()).orElseThrow();
-            assertThat(settledBet.getStatus()).isEqualTo("SETTLED");
+            Bet settledBet = betRepository.findById(bet.getId()).orElseThrow();
+            assertThat(settledBet.getStatus()).isEqualTo(BetStatus.SETTLED);
+            assertThat(settledBet.getSettledDate()).isNotNull();
+            assertThat(settledBet.getUpdatedDate()).isNotNull();
+            assertThat(settledBet.getVersion()).isEqualTo(1L);
         });
     }
 }

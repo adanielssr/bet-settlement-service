@@ -1,0 +1,42 @@
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "health"
+  endpoint:
+    health:
+      show-details: always
+      cache:
+        time-to-live: 2s
+
+spring:
+  application:
+    name: bet-settlement-service
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driverClassName: org.h2.Driver
+    username: sa
+    password: password
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+  h2:
+    console:
+      enabled: true
+  kafka:
+    bootstrap-servers: kafka:9092
+    consumer:
+      group-id: event-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+rocketmq:
+  name-server: rocketmq-namesrv:9876
+  consumer:
+    group: bet-settlement-consumer-group

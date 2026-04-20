@@ -10,6 +10,8 @@ import org.springframework.http.MediaType;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.UUID;
+
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -29,9 +31,10 @@ class EventOutcomeControllerTest {
     @Test
     void should_publish_event_outcome() throws Exception {
         // given
-        EventOutcome eventOutcome = new EventOutcome("event1", "Football Match", "winner1");
-        String eventOutcomeJson = objectMapper.writeValueAsString(eventOutcome);
-
+        UUID eventId = UUID.randomUUID();
+        UUID winnerId = UUID.randomUUID();
+        EventOutcome eventOutcome = new EventOutcome(eventId, "Football Match", winnerId);
+        String eventOutcomeJson = "{\"eventId\":\"" + eventId + "\",\"eventName\":\"Football Match\",\"eventWinnerId\":\"" + winnerId + "\"}";
         // when
         mockMvc.perform(post("/events/outcome")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -39,6 +42,6 @@ class EventOutcomeControllerTest {
                 .andExpect(status().isOk());
 
         // then
-        verify(kafkaTemplate).send("event-outcomes", eventOutcome.getEventId(), eventOutcomeJson);
+        verify(kafkaTemplate).send("event-outcomes", eventOutcome.eventId().toString(), eventOutcomeJson);
     }
 }
