@@ -86,16 +86,16 @@ Send a `POST` request to the `/events/outcome` endpoint.
 curl -X POST http://localhost:8080/events/outcome \
 -H "Content-Type: application/json" \
 -d '{
-      "eventId": "event1",
+      "eventId": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
       "eventName": "Football Match",
-      "eventWinnerId": "winner1"
+      "eventWinnerId": "f0e9d8c7-b6a5-4321-fedc-ba9876543210"
     }'
 ```
 
 **Windows PowerShell:**
 In PowerShell, `curl` is an alias for `Invoke-WebRequest`, which uses a different syntax. Use this command instead:
 ```powershell
-Invoke-WebRequest -Uri http://localhost:8080/events/outcome -Method POST -ContentType "application/json" -Body '{"eventId": "event1", "eventName": "Football Match", "eventWinnerId": "winner1"}'
+Invoke-WebRequest -Uri http://localhost:8080/events/outcome -Method POST -ContentType "application/json" -Body '{"eventId": "a1b2c3d4-e5f6-7890-1234-567890abcdef", "eventName": "Football Match", "eventWinnerId": "f0e9d8c7-b6a5-4321-fedc-ba9876543210"}'
 ```
 
 ### Verify the Result
@@ -109,6 +109,6 @@ You can verify the result by checking the application logs or by accessing the H
 
 Run the following SQL query to see the updated bet:
 ```sql
-SELECT * FROM BET WHERE EVENT_ID = 'event1';
+SELECT * FROM BET WHERE EVENT_ID = 'a1b2c3d4-e5f6-7890-1234-567890abcdef';
 ```
-You will see that the status of the bet with `EVENT_WINNER_ID = 'winner1'` has changed from `PENDING` to `WON` or `LOST` (depending on the `eventWinnerId` in your POST request). The final `SETTLED` status would be applied by the RocketMQ consumer.
+You will see that the status of the bet with `EVENT_WINNER_ID = 'f0e9d8c7-b6a5-4321-fedc-ba9876543210'` has changed from `PENDING` to `WON` or `LOST` (depending on the `eventWinnerId` in your POST request). The final `SETTLED` status would be applied by the RocketMQ consumer.
