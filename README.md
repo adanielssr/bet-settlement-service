@@ -54,17 +54,27 @@ First, use the Gradle wrapper to build the executable JAR file:
 ./gradlew bootJar
 ```
 
-### 2. Run the Entire Stack
+### 2. Start Infrastructure and Configure RocketMQ Topic
 
-Once the JAR is built, use Docker Compose to build the application image and run all services:
+Start all services *except* the application, then manually configure the RocketMQ topic for FIFO messaging.
+
 ```bash
-docker-compose up --build
+docker compose up --build --scale app=0 -d
 ```
-This will:
-1. Start Kafka and RocketMQ.
-2. Build the Docker image for your application using the `Dockerfile`.
-3. Start your application, connecting it to the other services.
 
+Wait a few moments for RocketMQ to fully start (you can check `docker compose logs rocketmq-broker`). Then, execute the topic creation command:
+
+```bash
+docker compose exec -it rocketmq-broker sh mqadmin updateTopic -n rocketmq-namesrv:9876 -c DefaultCluster -t bet-settlements -a "+message.type=FIFO"
+```
+
+### 3. Start the Application
+
+Now, scale up and start your application service:
+
+```bash
+docker compose up --scale app=1 -d
+```
 The application will be available at `http://localhost:8080`.
 
 ## Use the Application
@@ -86,16 +96,16 @@ Send a `POST` request to the `/events/outcome` endpoint.
 curl -X POST http://localhost:8080/events/outcome \
 -H "Content-Type: application/json" \
 -d '{
-      "eventId": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+      "eventId": "22e653d5-b12d-4e48-995c-73fdaabdc99c",
       "eventName": "Football Match",
-      "eventWinnerId": "f0e9d8c7-b6a5-4321-fedc-ba9876543210"
+      "eventWinnerId": "dfba1b4f-4a2e-4940-b630-18a81c7d3bf6"
     }'
 ```
 
 **Windows PowerShell:**
 In PowerShell, `curl` is an alias for `Invoke-WebRequest`, which uses a different syntax. Use this command instead:
 ```powershell
-Invoke-WebRequest -Uri http://localhost:8080/events/outcome -Method POST -ContentType "application/json" -Body '{"eventId": "a1b2c3d4-e5f6-7890-1234-567890abcdef", "eventName": "Football Match", "eventWinnerId": "f0e9d8c7-b6a5-4321-fedc-ba9876543210"}'
+Invoke-WebRequest -Uri http://localhost:8080/events/outcome -Method POST -ContentType "application/json" -Body '{"eventId": "22e653d5-b12d-4e48-995c-73fdaabdc99c", "eventName": "Football Match", "eventWinnerId": "dfba1b4f-4a2e-4940-b630-18a81c7d3bf6"}'
 ```
 
 ### Verify the Result
@@ -109,6 +119,6 @@ You can verify the result by checking the application logs or by accessing the H
 
 Run the following SQL query to see the updated bet:
 ```sql
-SELECT * FROM BET WHERE EVENT_ID = 'a1b2c3d4-e5f6-7890-1234-567890abcdef';
+SELECT * FROM BET WHERE EVENT_ID = '22e653d5-b12d-4e48-995c-73fdaabdc99c';
 ```
-You will see that the status of the bet with `EVENT_WINNER_ID = 'f0e9d8c7-b6a5-4321-fedc-ba9876543210'` has changed from `PENDING` to `WON` or `LOST` (depending on the `eventWinnerId` in your POST request). The final `SETTLED` status would be applied by the RocketMQ consumer.
+You will see that the status of the bet with `EVENT_WINNER_ID = 'dfba1b4f-4a2e-4940-b630-18a81c7d3bf6'` has changed from `PENDING` to `WON` or `LOST` (depending on the `eventWinnerId` in your POST request). The final `SETTLED` status would be applied by the RocketMQ consumer.

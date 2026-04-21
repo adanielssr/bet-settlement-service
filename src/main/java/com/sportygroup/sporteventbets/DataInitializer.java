@@ -24,10 +24,10 @@ public class DataInitializer implements CommandLineRunner {
     @Override
     public void run(String... args) {
         // Sample bets
-        UUID event1 = UUID.randomUUID();
+        UUID event1 = UUID.fromString("22e653d5-b12d-4e48-995c-73fdaabdc99c");
         UUID user1 = UUID.randomUUID();
         UUID user2 = UUID.randomUUID();
-        UUID winner1 = UUID.randomUUID();
+        UUID winner1 = UUID.fromString("dfba1b4f-4a2e-4940-b630-18a81c7d3bf6");
         UUID winner2 = UUID.randomUUID();
 
         betRepository.save(new Bet(UUID.randomUUID(), user1, event1, "market1", winner1, new Money(new BigDecimal("10.00"), "USD"), BetStatus.PENDING, null, null, null, null));
